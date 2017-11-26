@@ -101,9 +101,10 @@ func NewServer(config *Config, profileNum int, isyConfig *isy.ClientConfig) (*Se
 	hs.Handler = http.HandlerFunc(s.handler)
 
 	s.client = nsClient{
-		BaseURL:  baseURL.ResolveReference(relURL),
-		Username: isyConfig.Username,
-		Password: isyConfig.Password,
+		BaseURL:    baseURL.ResolveReference(relURL),
+		AddrPrefix: fmt.Sprintf("n%03d_", profileNum),
+		Username:   isyConfig.Username,
+		Password:   isyConfig.Password,
 	}
 
 	return s, nil
@@ -119,6 +120,10 @@ func (s *Server) ListenAndServe() error {
 
 func (s *Server) ListenAndServeTLS(certFile, keyFile string) error {
 	return s.httpServer.ListenAndServeTLS(certFile, keyFile)
+}
+
+func (s *Server) AddNode(addr, defId, primaryAddr, name string) error {
+	return s.client.AddNode(addr, defId, primaryAddr, name)
 }
 
 func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
@@ -290,9 +295,10 @@ func (s *Server) makeCommandParams(r *http.Request) map[string]CommandParam {
 }
 
 type nsClient struct {
-	BaseURL  *url.URL
-	Username string
-	Password string
+	BaseURL    *url.URL
+	AddrPrefix string
+	Username   string
+	Password   string
 }
 
 func (c *nsClient) Request(url *url.URL) error {
@@ -322,6 +328,19 @@ func (c *nsClient) MakeURL(parts ...string) *url.URL {
 	return c.BaseURL.ResolveReference(relURL)
 }
 
+func (c *nsClient) FormatAddr(base string) string {
+	return c.AddrPrefix + base
+}
+
+func (c *nsClient) ParseAddr(given string) string {
+	if !strings.HasPrefix(given, c.AddrPrefix) {
+		// Should never happen if the server is behaving
+		return given
+	}
+
+	return given[len(c.AddrPrefix):]
+}
+
 func (c *nsClient) ReportRequestStatus(id string, success bool) error {
 	var url *url.URL
 	if success {
@@ -329,6 +348,24 @@ func (c *nsClient) ReportRequestStatus(id string, success bool) error {
 	} else {
 		url = c.MakeURL("report", "status", id, "fail")
 	}
+	return c.Request(url)
+}
+
+func (c *nsClient) AddNode(addr, defId, primaryAddr, name string) error {
+	addr = c.FormatAddr(addr)
+	if primaryAddr != "" {
+		primaryAddr = c.FormatAddr(primaryAddr)
+	}
+	url := c.MakeURL("nodes", addr, "add", defId)
+	qs := url.Query()
+	if primaryAddr != "" {
+		qs.Set("primary", primaryAddr)
+	}
+	if name != "" {
+		qs.Set("name", name)
+	}
+	url.RawQuery = qs.Encode()
+
 	return c.Request(url)
 }
 

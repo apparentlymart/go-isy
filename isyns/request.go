@@ -3,6 +3,7 @@ package isyns
 type Request interface {
 	ID() string
 	Complete(success bool) error
+	Server() *Server
 	requestSigil() request
 }
 
@@ -72,6 +73,10 @@ func (r request) Complete(success bool) error {
 	}
 
 	return r.server.client.ReportRequestStatus(r.id, success)
+}
+
+func (r request) Server() *Server {
+	return r.server
 }
 
 func (r request) requestSigil() request {
