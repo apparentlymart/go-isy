@@ -59,6 +59,7 @@ type Server struct {
 	httpServer     *http.Server
 	username       string
 	passwordSHA256 []byte
+	addrPrefix     string
 }
 
 type Config struct {
@@ -97,12 +98,13 @@ func NewServer(config *Config, profileNum int, isyConfig *isy.ClientConfig) (*Se
 	s.username = config.Username
 	passwordSHA256 := sha256.Sum256([]byte(config.Password))
 	s.passwordSHA256 = passwordSHA256[:]
+	s.addrPrefix = fmt.Sprintf("n%03d_", profileNum)
 
 	hs.Handler = http.HandlerFunc(s.handler)
 
 	s.client = nsClient{
 		BaseURL:    baseURL.ResolveReference(relURL),
-		AddrPrefix: fmt.Sprintf("n%03d_", profileNum),
+		AddrPrefix: s.addrPrefix,
 		Username:   isyConfig.Username,
 		Password:   isyConfig.Password,
 	}
@@ -158,12 +160,12 @@ func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
 	case "nodeQuery":
 		req = &NodeQueryRequest{
 			request:  s.makeCommonReq(r),
-			NodeAddr: match.Vars["nodeAddr"],
+			NodeAddr: s.parseAddr(match.Vars["nodeAddr"]),
 		}
 	case "nodeStatus":
 		req = &NodeStatusValuesRequest{
 			request:  s.makeCommonReq(r),
-			NodeAddr: match.Vars["nodeAddr"],
+			NodeAddr: s.parseAddr(match.Vars["nodeAddr"]),
 		}
 	case "addAllNodes":
 		req = &AddAllNodesRequest{
@@ -172,45 +174,45 @@ func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
 	case "addNode":
 		req = &AddNodeRequest{
 			request:     s.makeCommonReq(r),
-			NodeAddr:    match.Vars["nodeAddr"],
+			NodeAddr:    s.parseAddr(match.Vars["nodeAddr"]),
 			NodeDefID:   match.Vars["nodeDefId"],
-			PrimaryAddr: r.URL.Query().Get("primary"),
+			PrimaryAddr: s.parseAddr(r.URL.Query().Get("primary")),
 			Name:        r.URL.Query().Get("name"),
 		}
 	case "removeNode":
 		req = &RemoveNodeRequest{
 			request:  s.makeCommonReq(r),
-			NodeAddr: match.Vars["nodeAddr"],
+			NodeAddr: s.parseAddr(match.Vars["nodeAddr"]),
 		}
 	case "renameNode":
 		req = &RenameNodeRequest{
 			request:  s.makeCommonReq(r),
-			NodeAddr: match.Vars["nodeAddr"],
+			NodeAddr: s.parseAddr(match.Vars["nodeAddr"]),
 			Name:     r.URL.Query().Get("name"),
 		}
 	case "enableNode":
 		req = &EnableNodeRequest{
 			request:  s.makeCommonReq(r),
-			NodeAddr: match.Vars["nodeAddr"],
+			NodeAddr: s.parseAddr(match.Vars["nodeAddr"]),
 			Enabled:  true,
 		}
 	case "disableNode":
 		req = &EnableNodeRequest{
 			request:  s.makeCommonReq(r),
-			NodeAddr: match.Vars["nodeAddr"],
+			NodeAddr: s.parseAddr(match.Vars["nodeAddr"]),
 			Enabled:  false,
 		}
 	case "nodeCommand":
 		req = &CommandRequest{
 			request:  s.makeCommonReq(r),
-			NodeAddr: match.Vars["nodeAddr"],
+			NodeAddr: s.parseAddr(match.Vars["nodeAddr"]),
 			Command:  match.Vars["command"],
 			Params:   s.makeCommandParams(r),
 		}
 	case "nodeCommandValue":
 		req = &CommandRequest{
 			request:  s.makeCommonReq(r),
-			NodeAddr: match.Vars["nodeAddr"],
+			NodeAddr: s.parseAddr(match.Vars["nodeAddr"]),
 			Command:  match.Vars["command"],
 			Param: &CommandParam{
 				Value: match.Vars["value"],
@@ -225,7 +227,7 @@ func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
 		}
 		req = &CommandRequest{
 			request:  s.makeCommonReq(r),
-			NodeAddr: match.Vars["nodeAddr"],
+			NodeAddr: s.parseAddr(match.Vars["nodeAddr"]),
 			Command:  match.Vars["command"],
 			Param: &CommandParam{
 				Value: match.Vars["value"],
@@ -292,6 +294,19 @@ func (s *Server) makeCommandParams(r *http.Request) map[string]CommandParam {
 		}
 	}
 	return ret
+}
+
+func (s *Server) formatAddr(base string) string {
+	return s.addrPrefix + base
+}
+
+func (s *Server) parseAddr(given string) string {
+	if !strings.HasPrefix(given, s.addrPrefix) {
+		// Should never happen if the server is behaving
+		return given
+	}
+
+	return given[len(s.addrPrefix):]
 }
 
 type nsClient struct {
