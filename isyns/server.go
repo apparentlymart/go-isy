@@ -72,7 +72,7 @@ type Config struct {
 }
 
 func NewServer(config *Config, profileNum int, isyConfig *isy.ClientConfig) (*Server, error) {
-	relPath := path.Join("rest", "ns", strconv.Itoa(profileNum))
+	relPath := path.Join("rest", "ns", strconv.Itoa(profileNum)) + "/"
 	relURL, err := url.Parse(relPath)
 	if err != nil {
 		// should never happen
@@ -309,6 +309,7 @@ func (c *nsClient) Request(url *url.URL) error {
 	}
 	req.SetBasicAuth(c.Username, c.Password)
 	resp, err := http.DefaultClient.Do(req)
+	log.Printf("%s %s -> %d %s", req.Method, req.URL, resp.StatusCode, resp.Status)
 	if err != nil {
 		return err
 	}
