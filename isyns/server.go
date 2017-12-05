@@ -128,6 +128,10 @@ func (s *Server) AddNode(addr, defId, primaryAddr, name string) error {
 	return s.client.AddNode(addr, defId, primaryAddr, name)
 }
 
+func (s *Server) ReportNodeStatus(addr, field, value string, uom isy.UOM) error {
+	return s.client.ReportNodeStatus(addr, field, value, uom)
+}
+
 func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
 	username, password, authed := r.BasicAuth()
 	if !authed {
@@ -382,6 +386,12 @@ func (c *nsClient) AddNode(addr, defId, primaryAddr, name string) error {
 	}
 	url.RawQuery = qs.Encode()
 
+	return c.Request(url)
+}
+
+func (c *nsClient) ReportNodeStatus(addr, field, value string, uom isy.UOM) error {
+	addr = c.FormatAddr(addr)
+	url := c.MakeURL("nodes", addr, "report", "status", field, value, strconv.Itoa(int(uom)))
 	return c.Request(url)
 }
 
